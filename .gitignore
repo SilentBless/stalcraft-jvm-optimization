@@ -1,0 +1,17 @@
+*.exe
+*.dll
+*.obj
+*.o
+
+wrapper/wrapper
+
+__debug_bin*
+
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+.env
+*.log
