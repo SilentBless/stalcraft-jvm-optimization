@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -214,12 +213,8 @@ func main() {
 	}
 
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage:")
-		fmt.Fprintln(os.Stderr, "  wrapper.exe <target.exe> [args...]")
-		fmt.Fprintln(os.Stderr, "  wrapper.exe --install    Register IFEO (requires admin)")
-		fmt.Fprintln(os.Stderr, "  wrapper.exe --uninstall  Remove IFEO (requires admin)")
-		fmt.Fprintln(os.Stderr, "  wrapper.exe --status     Check installation status")
-		os.Exit(1)
+		interactiveMenu()
+		return
 	}
 
 	hideConsole()

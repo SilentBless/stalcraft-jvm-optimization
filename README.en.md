@@ -12,29 +12,43 @@ JVM wrapper for STALCRAFT that dynamically tunes JVM flags and boosts process pr
 
 ## Install
 
-Download `wrapper.exe` from [Releases](../../releases), place it anywhere, and run as admin:
+Download `wrapper.exe` from [Releases](../../releases), place it anywhere, and run as admin.
+
+Just run `wrapper.exe` — an interactive menu will appear:
 
 ```
-wrapper.exe --install
+STALCRAFT JVM Optimization Wrapper
+-----------------------------------
+  > Install
+    Uninstall
+    Status
+    Exit
 ```
 
-Done. Every launch of `stalcraft.exe` now goes through the wrapper automatically.
+Use arrow keys to select, Enter to confirm.
 
-### Other commands
+Done. Every game launch now goes through the wrapper automatically.
+
+Both versions are supported:
+- `stalcraft.exe` (main launcher) → `java.exe`
+- `stalcraftw.exe` (Steam) → `javaw.exe`
+
+### Terminal commands
 
 ```
+wrapper.exe --install     # register IFEO hook
 wrapper.exe --status      # check if installed
 wrapper.exe --uninstall   # remove IFEO hook
 ```
 
 ## How it works
 
-Windows [Image File Execution Options](https://learn.microsoft.com/en-us/previous-versions/windows/desktop/xperf/image-file-execution-options) intercepts `stalcraft.exe` launch and redirects it through the wrapper. The wrapper:
+Windows [Image File Execution Options](https://learn.microsoft.com/en-us/previous-versions/windows/desktop/xperf/image-file-execution-options) intercepts `stalcraft.exe` / `stalcraftw.exe` launch and redirects it through the wrapper. The wrapper:
 
 1. Detects hardware via `GlobalMemoryStatusEx`, `runtime.NumCPU`, `GetLargePageMinimum`
 2. Calculates optimal JVM flags based on available resources
 3. Strips conflicting flags from the original launcher arguments
-4. Launches the real `stalcraft.exe` with tuned flags and `HIGH_PRIORITY_CLASS`
+4. Launches the real `java.exe` / `javaw.exe` with tuned flags and `HIGH_PRIORITY_CLASS`
 5. Applies post-launch boost: disables priority decay, sets max memory and I/O priority
 
 ### Dynamic tuning
