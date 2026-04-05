@@ -44,9 +44,9 @@ func generateFlags(sys SystemInfo) []string {
 
 		"-XX:+UseCompressedOops",
 		fmt.Sprintf("-XX:ReservedCodeCacheSize=%dm", cc),
-		fmt.Sprintf("-XX:NonNMethodCodeHeapSize=%dm", cc*3/100+8),
-		fmt.Sprintf("-XX:ProfiledCodeHeapSize=%dm", cc*40/100),
-		fmt.Sprintf("-XX:NonProfiledCodeHeapSize=%dm", cc*57/100),
+		fmt.Sprintf("-XX:NonNMethodCodeHeapSize=%dm", calcNonMethod(cc)),
+		fmt.Sprintf("-XX:ProfiledCodeHeapSize=%dm", calcProfiled(cc)),
+		fmt.Sprintf("-XX:NonProfiledCodeHeapSize=%dm", calcNonProfiled(cc)),
 		"-XX:MaxInlineLevel=15",
 		"-XX:FreqInlineSize=500",
 
@@ -137,6 +137,10 @@ func calcCodeCache(heapGB uint64) uint64 {
 	}
 	return cc
 }
+
+func calcNonMethod(cc uint64) uint64  { return cc * 5 / 100 }
+func calcProfiled(cc uint64) uint64   { return cc * 38 / 100 }
+func calcNonProfiled(cc uint64) uint64 { return cc - calcNonMethod(cc) - calcProfiled(cc) }
 
 func calcSurvivor(sys SystemInfo) (ratio, tenuring int) {
 	if sys.CPUCores <= 4 {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -17,7 +18,7 @@ var (
 )
 
 const (
-	highPriorityClass    = 0x00000080
+	highPriorityClass     = 0x00000080
 	processMemoryPriority = 0x27
 	memoryPriorityNormal  = 5
 	processIoPriority     = 0x21
@@ -60,12 +61,30 @@ var prefixRemove = []string{
 	"-Xmx",
 }
 
+var procGetConsoleWindow = kernel32.NewProc("GetConsoleWindow")
+
+func hideConsole() {
+	user32 := syscall.NewLazyDLL("user32.dll")
+	showWindow := user32.NewProc("ShowWindow")
+	hwnd, _, _ := procGetConsoleWindow.Call()
+	if hwnd != 0 {
+		showWindow.Call(hwnd, 0)
+	}
+}
+
+func resolveTarget(target string) string {
+	p := filepath.Join(filepath.Dir(target), "java.exe")
+	if _, err := os.Stat(p); err == nil {
+		return p
+	}
+	return target
+}
+
 func splitArgs(args []string) (jvm []string, mainClass string, app []string) {
 	for i := 0; i < len(args); {
-		arg := args[i]
-
-		if arg == "-classpath" || arg == "-cp" || arg == "-jar" {
-			jvm = append(jvm, arg)
+		a := args[i]
+		if a == "-classpath" || a == "-cp" || a == "-jar" {
+			jvm = append(jvm, a)
 			i++
 			if i < len(args) {
 				jvm = append(jvm, args[i])
@@ -73,14 +92,12 @@ func splitArgs(args []string) (jvm []string, mainClass string, app []string) {
 			i++
 			continue
 		}
-
-		if strings.HasPrefix(arg, "-") {
-			jvm = append(jvm, arg)
+		if strings.HasPrefix(a, "-") {
+			jvm = append(jvm, a)
 			i++
 			continue
 		}
-
-		mainClass = arg
+		mainClass = a
 		app = args[i+1:]
 		return
 	}
@@ -99,21 +116,15 @@ func shouldRemove(arg string) bool {
 	return false
 }
 
-func modifyArgs(orig, injected []string) []string {
+func filterArgs(orig, injected []string) []string {
 	jvm, mainClass, app := splitArgs(orig)
 
 	var filtered []string
-	removed := 0
 	for _, a := range jvm {
-		if shouldRemove(a) {
-			removed++
-		} else {
+		if !shouldRemove(a) {
 			filtered = append(filtered, a)
 		}
 	}
-
-	log("[wrapper] Flags: %d injected, %d removed", len(injected), removed)
-
 	result := make([]string, 0, len(filtered)+len(injected)+1+len(app))
 	result = append(result, filtered...)
 	result = append(result, injected...)
@@ -123,30 +134,53 @@ func modifyArgs(orig, injected []string) []string {
 	return append(result, app...)
 }
 
-func boostProcess(handle syscall.Handle) {
-	if ret, _, err := procSetProcessPriorityBoost.Call(uintptr(handle), 1); ret == 0 {
-		log("[wrapper] SetProcessPriorityBoost failed: %v", err)
+func boostProcess(pid uint32) {
+	handle, err := syscall.OpenProcess(processSetInfo|processQueryInfo, false, pid)
+	if err != nil {
+		return
 	}
+	defer syscall.CloseHandle(handle)
+
+	procSetProcessPriorityBoost.Call(uintptr(handle), 1)
 
 	mem := uint32(memoryPriorityNormal)
-	if ret, _, _ := procNtSetInformationProcess.Call(
+	procNtSetInformationProcess.Call(
 		uintptr(handle), uintptr(processMemoryPriority),
 		uintptr(unsafe.Pointer(&mem)), unsafe.Sizeof(mem),
-	); ret != 0 {
-		log("[wrapper] NtSetInformationProcess(MemoryPriority) NTSTATUS: 0x%X", ret)
-	}
+	)
 
-	io := uint32(ioPriorityHigh)
-	if ret, _, _ := procNtSetInformationProcess.Call(
+	iop := uint32(ioPriorityHigh)
+	procNtSetInformationProcess.Call(
 		uintptr(handle), uintptr(processIoPriority),
-		uintptr(unsafe.Pointer(&io)), unsafe.Sizeof(io),
-	); ret != 0 {
-		log("[wrapper] NtSetInformationProcess(IoPriority) NTSTATUS: 0x%X", ret)
-	}
+		uintptr(unsafe.Pointer(&iop)), unsafe.Sizeof(iop),
+	)
 }
 
-func log(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
+func run() int {
+	target := resolveTarget(os.Args[1])
+	sys := detectSystem()
+	args := filterArgs(os.Args[2:], generateFlags(sys))
+
+	cmd := exec.Command(target, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: highPriorityClass}
+
+	if err := cmd.Start(); err != nil {
+		return 1
+	}
+
+	boostProcess(uint32(cmd.Process.Pid))
+
+	if err := cmd.Wait(); err != nil {
+		if exit, ok := err.(*exec.ExitError); ok {
+			return exit.ExitCode()
+		}
+		return 1
+	}
+	return 0
 }
 
 func main() {
@@ -165,54 +199,14 @@ func main() {
 	}
 
 	if len(os.Args) < 2 {
-		log("[wrapper] Usage:")
-		log("  wrapper.exe <target.exe> [args...]")
-		log("  wrapper.exe --install    Register IFEO (requires admin)")
-		log("  wrapper.exe --uninstall  Remove IFEO (requires admin)")
-		log("  wrapper.exe --status     Check installation status")
+		fmt.Fprintln(os.Stderr, "Usage:")
+		fmt.Fprintln(os.Stderr, "  wrapper.exe <target.exe> [args...]")
+		fmt.Fprintln(os.Stderr, "  wrapper.exe --install    Register IFEO (requires admin)")
+		fmt.Fprintln(os.Stderr, "  wrapper.exe --uninstall  Remove IFEO (requires admin)")
+		fmt.Fprintln(os.Stderr, "  wrapper.exe --status     Check installation status")
 		os.Exit(1)
 	}
 
-	target := os.Args[1]
-	sys := detectSystem()
-	log("[wrapper] System: %d cores, %.1fGB total, %.1fGB free, large pages: %v",
-		sys.CPUCores, sys.TotalRAMGB(), sys.FreeRAMGB(), sys.LargePages)
-
-	injected := generateFlags(sys)
-	heap := calcHeap(sys)
-	parallel, conc := calcGCThreads(sys)
-	log("[wrapper] Heap: %dg | GC: parallel=%d concurrent=%d | Region: %dm",
-		heap, parallel, conc, calcRegionSize(heap))
-
-	args := modifyArgs(os.Args[2:], injected)
-
-	cmd := exec.Command(target, args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = os.Environ()
-	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: highPriorityClass}
-
-	if err := cmd.Start(); err != nil {
-		log("[wrapper] Failed to start %s: %v", target, err)
-		os.Exit(1)
-	}
-	log("[wrapper] Started PID %d", cmd.Process.Pid)
-
-	handle, err := syscall.OpenProcess(processSetInfo|processQueryInfo, false, uint32(cmd.Process.Pid))
-	if err == nil {
-		boostProcess(handle)
-		syscall.CloseHandle(handle)
-		log("[wrapper] Process boosted")
-	} else {
-		log("[wrapper] OpenProcess failed: %v", err)
-	}
-
-	if err := cmd.Wait(); err != nil {
-		if exit, ok := err.(*exec.ExitError); ok {
-			os.Exit(exit.ExitCode())
-		}
-		log("[wrapper] %v", err)
-		os.Exit(1)
-	}
+	hideConsole()
+	os.Exit(run())
 }
