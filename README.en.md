@@ -1,6 +1,11 @@
 # stalcraft-wrapper
 
+[![Downloads](https://img.shields.io/github/downloads/SilentBless/stalcraft-jvm-optimization/total?label=Downloads&color=green)](../../releases)
+[![Latest Release](https://img.shields.io/github/v/release/SilentBless/stalcraft-jvm-optimization?label=Latest)](../../releases/latest)
+
 JVM wrapper for STALCRAFT. Automatically optimizes Java settings for your hardware for better performance.
+
+> **Note:** On systems with 8 GB of RAM or less, the wrapper does not inject flags — the default launcher settings are sufficient, and aggressive tuning on low memory can hurt performance.
 
 ## What it does
 

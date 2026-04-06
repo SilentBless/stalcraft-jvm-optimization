@@ -1,8 +1,12 @@
 # stalcraft-wrapper
 
 [![en](https://img.shields.io/badge/lang-English-blue)](README.en.md)
+[![Downloads](https://img.shields.io/github/downloads/SilentBless/stalcraft-jvm-optimization/total?label=Downloads&color=green)](../../releases)
+[![Latest Release](https://img.shields.io/github/v/release/SilentBless/stalcraft-jvm-optimization?label=Latest)](../../releases/latest)
 
 JVM-враппер для STALCRAFT. Автоматически оптимизирует настройки Java под ваше железо для лучшей производительности.
+
+> **Важно:** На системах с 8 ГБ оперативной памяти и менее враппер не инжектирует флаги — стандартных настроек лаунчера достаточно, а агрессивная оптимизация на малом объёме памяти может навредить.
 
 ## Что делает
 
