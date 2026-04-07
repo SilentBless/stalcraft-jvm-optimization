@@ -97,10 +97,21 @@ func buildCmdLine(exe string, args []string) string {
 	return strings.Join(parts, " ")
 }
 
-func extractGameDir(args []string) string {
+func extractGameDir(exePath string, args []string) string {
 	for i, a := range args {
 		if a == "--gameDir" && i+1 < len(args) {
 			return args[i+1]
+		}
+	}
+	// EGS: no --gameDir. Infer root from exe path and -Djava.library.path.
+	// exe is at <root>/<libpath>/stalcraftw.exe, so root = exeDir trimmed by libpath.
+	for _, a := range args {
+		if strings.HasPrefix(a, "-Djava.library.path=") {
+			libPath := filepath.ToSlash(strings.TrimPrefix(a, "-Djava.library.path="))
+			exeDir := filepath.ToSlash(filepath.Dir(exePath))
+			if strings.HasSuffix(exeDir, libPath) {
+				return filepath.FromSlash(exeDir[:len(exeDir)-len(libPath)])
+			}
 		}
 	}
 	return ""
@@ -112,7 +123,7 @@ func ntCreateProcess(exePath string, args []string) (hProcess, hThread syscall.H
 	ntPath := `\??\` + absPath
 	cmdLine := buildCmdLine(absPath, args)
 
-	workDir := extractGameDir(args)
+	workDir := extractGameDir(absPath, args)
 	if workDir == "" {
 		workDir = filepath.Dir(absPath)
 	}
