@@ -27,15 +27,12 @@ const (
 	rtlUserProcParamsNormalized      = 0x01
 	ifeoSkipDebugger                 = 0x04
 	processCreateFlagsInheritHandles = 0x04
-	processAllAccess                 = 0x001FFFFF
-	threadAllAccess                  = 0x001FFFFF
-	processSetInfo                   = 0x0200
-	processQueryInfo                 = 0x0400
-	processMemoryPriority            = 0x27
-	processIoPriority                = 0x21
-	memoryPriorityHigh               = 5
-	ioPriorityHigh                   = 3
-	infinite                         = 0xFFFFFFFF
+	processAllAccess      = 0x001FFFFF
+	threadAllAccess       = 0x001FFFFF
+	processMemoryPriority = 0x27
+	processIoPriority     = 0x21
+	memoryPriorityHigh    = 5
+	ioPriorityHigh        = 3
 )
 
 // UNICODE_STRING (x64: 16 bytes)
