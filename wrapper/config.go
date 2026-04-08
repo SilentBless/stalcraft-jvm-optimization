@@ -153,6 +153,7 @@ func generateConfig(sys SystemInfo) Config {
 		cfg.GCTimeRatio = 19
 
 		cfg.ReservedCodeCacheSizeMB = 256
+		cfg.DontCompileHugeMethods = true
 	}
 
 	return cfg
