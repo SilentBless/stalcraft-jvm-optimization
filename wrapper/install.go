@@ -13,11 +13,10 @@ const (
 
 var targetExes = []string{"stalcraft.exe", "stalcraftw.exe"}
 
-func install() {
+func install() error {
 	self, err := os.Executable()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[install] Failed to get executable path: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
 	for _, target := range targetExes {
@@ -27,23 +26,20 @@ func install() {
 			registry.ALL_ACCESS,
 		)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "[install] Failed to create IFEO key for %s (run as admin): %v\n", target, err)
-			os.Exit(1)
+			return fmt.Errorf("failed to create IFEO key for %s: %w", target, err)
 		}
 
 		if err := key.SetStringValue("Debugger", `"`+self+`"`); err != nil {
 			key.Close()
-			fmt.Fprintf(os.Stderr, "[install] Failed to set Debugger value for %s: %v\n", target, err)
-			os.Exit(1)
+			return fmt.Errorf("failed to set Debugger value for %s: %w", target, err)
 		}
 		key.Close()
-
-		fmt.Printf("[install] IFEO registered for %s\n", target)
 	}
-	fmt.Printf("[install] Debugger = %s\n", self)
+	return nil
 }
 
-func uninstall() {
+func uninstall() error {
+	var lastErr error
 	for _, target := range targetExes {
 		key, err := registry.OpenKey(
 			registry.LOCAL_MACHINE,
@@ -51,17 +47,18 @@ func uninstall() {
 			registry.SET_VALUE,
 		)
 		if err != nil {
+			lastErr = fmt.Errorf("failed to open IFEO key for %s: %w", target, err)
 			continue
 		}
 
 		if err := key.DeleteValue("Debugger"); err != nil {
 			key.Close()
+			lastErr = fmt.Errorf("failed to delete Debugger for %s: %w", target, err)
 			continue
 		}
 		key.Close()
-
-		fmt.Printf("[uninstall] IFEO removed for %s\n", target)
 	}
+	return lastErr
 }
 
 func status() {

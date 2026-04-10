@@ -10,32 +10,28 @@ import (
 	"unsafe"
 )
 
-// NT API procedures
 var (
 	procRtlCreateProcessParametersEx = ntdll.NewProc("RtlCreateProcessParametersEx")
 	procNtCreateUserProcess          = ntdll.NewProc("NtCreateUserProcess")
 	procRtlDestroyProcessParameters  = ntdll.NewProc("RtlDestroyProcessParameters")
 	procSetProcessPriorityBoost      = kernel32.NewProc("SetProcessPriorityBoost")
 	procNtSetInformationProcess      = ntdll.NewProc("NtSetInformationProcess")
-	procGetExitCodeProcess           = kernel32.NewProc("GetExitCodeProcess")
 )
 
-// NT constants
 const (
 	psAttrImageName                  = 0x00020005
 	psAttrClientID                   = 0x00010003
 	rtlUserProcParamsNormalized      = 0x01
 	ifeoSkipDebugger                 = 0x04
 	processCreateFlagsInheritHandles = 0x04
-	processAllAccess      = 0x001FFFFF
-	threadAllAccess       = 0x001FFFFF
-	processMemoryPriority = 0x27
-	processIoPriority     = 0x21
-	memoryPriorityHigh    = 5
-	ioPriorityHigh        = 3
+	processAllAccess                 = 0x001FFFFF
+	threadAllAccess                  = 0x001FFFFF
+	processMemoryPriority            = 0x27
+	processIoPriority                = 0x21
+	memoryPriorityHigh               = 5
+	ioPriorityHigh                   = 3
 )
 
-// UNICODE_STRING (x64: 16 bytes)
 type unicodeString struct {
 	Length        uint16
 	MaximumLength uint16
@@ -43,13 +39,11 @@ type unicodeString struct {
 	Buffer        *uint16
 }
 
-// CLIENT_ID (x64: 16 bytes)
 type clientID struct {
 	UniqueProcess uintptr
 	UniqueThread  uintptr
 }
 
-// PS_ATTRIBUTE (x64: 32 bytes)
 type psAttribute struct {
 	Attribute    uintptr
 	Size         uintptr
@@ -57,13 +51,11 @@ type psAttribute struct {
 	ReturnLength uintptr
 }
 
-// PS_ATTRIBUTE_LIST for 2 attributes (ImageName + ClientId)
 type psAttributeList2 struct {
 	TotalLength uintptr
 	Attributes  [2]psAttribute
 }
 
-// PS_CREATE_INFO (x64: 0x58 bytes, stable across Win10/Win11)
 type psCreateInfo [0x58]byte
 
 func newUnicodeString(s string) (unicodeString, []uint16) {
@@ -103,8 +95,6 @@ func extractGameDir(exePath string, args []string) string {
 			return args[i+1]
 		}
 	}
-	// EGS: no --gameDir. Infer root from exe path and -Djava.library.path.
-	// exe is at <root>/<libpath>/stalcraftw.exe, so root = exeDir trimmed by libpath.
 	for _, a := range args {
 		if strings.HasPrefix(a, "-Djava.library.path=") {
 			libPath := filepath.ToSlash(strings.TrimPrefix(a, "-Djava.library.path="))
@@ -117,7 +107,7 @@ func extractGameDir(exePath string, args []string) string {
 	return ""
 }
 
-// ntCreateProcess creates a process via NtCreateUserProcess, bypassing kernel32 IFEO check.
+// ntCreateProcess creates a process via NtCreateUserProcess, bypassing IFEO.
 func ntCreateProcess(exePath string, args []string) (hProcess, hThread syscall.Handle, pid uint32, err error) {
 	absPath, _ := filepath.Abs(exePath)
 	ntPath := `\??\` + absPath
@@ -140,13 +130,13 @@ func ntCreateProcess(exePath string, args []string) (hProcess, hThread syscall.H
 	r, _, _ := procRtlCreateProcessParametersEx.Call(
 		uintptr(unsafe.Pointer(&params)),
 		uintptr(unsafe.Pointer(&imgUS)),
-		0, // DllPath
+		0,
 		uintptr(unsafe.Pointer(&wdUS)),
 		uintptr(unsafe.Pointer(&cmdUS)),
 		uintptr(unsafe.Pointer(&envBlock[0])),
-		0, // WindowTitle
+		0,
 		uintptr(unsafe.Pointer(&desktopUS)),
-		0, 0, // ShellInfo, RuntimeData
+		0, 0,
 		rtlUserProcParamsNormalized,
 	)
 	if r != 0 {
@@ -180,9 +170,9 @@ func ntCreateProcess(exePath string, args []string) (hProcess, hThread syscall.H
 		uintptr(unsafe.Pointer(&hProcess)),
 		uintptr(unsafe.Pointer(&hThread)),
 		processAllAccess, threadAllAccess,
-		0, 0, // ObjectAttributes
+		0, 0,
 		processCreateFlagsInheritHandles,
-		0, // ThreadFlags
+		0,
 		params,
 		uintptr(unsafe.Pointer(&ci)),
 		uintptr(unsafe.Pointer(&al)),
@@ -205,7 +195,7 @@ func ntCreateProcess(exePath string, args []string) (hProcess, hThread syscall.H
 	return
 }
 
-// boostProcess sets high memory/IO priority and disables priority decay.
+// boostProcess sets high memory/IO priority and disables dynamic priority decay.
 func boostProcess(handle syscall.Handle) {
 	procSetProcessPriorityBoost.Call(uintptr(handle), 1)
 
@@ -251,14 +241,12 @@ func hasVisibleWindow(pid uint32) bool {
 
 func waitProcess(hProcess syscall.Handle, pid uint32) int {
 	for {
-		// Child exited?
 		ret, _ := syscall.WaitForSingleObject(hProcess, 200)
-		if ret == 0 { // WAIT_OBJECT_0
+		if ret == 0 {
 			var exitCode uint32
 			procGetExitCodeProcess.Call(uintptr(hProcess), uintptr(unsafe.Pointer(&exitCode)))
 			return int(exitCode)
 		}
-
 		if hasVisibleWindow(pid) {
 			return 0
 		}
