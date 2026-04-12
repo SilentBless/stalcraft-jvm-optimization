@@ -2,20 +2,12 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"unsafe"
 )
 
-var (
-	procReadConsoleInput = kernel32.NewProc("ReadConsoleInputW")
-	procGetStdHandle     = kernel32.NewProc("GetStdHandle")
-	procSetConsoleMode   = kernel32.NewProc("SetConsoleMode")
-	procGetConsoleMode   = kernel32.NewProc("GetConsoleMode")
-)
-
 const (
-	stdInputHandle  = ^uintptr(10 - 1) // -10
-	stdOutputHandle = ^uintptr(11 - 1) // -11
+	stdInputHandle  = ^uintptr(10 - 1)
+	stdOutputHandle = ^uintptr(11 - 1)
 
 	enableEchoInput                = 0x0004
 	enableLineInput                = 0x0002
@@ -23,6 +15,8 @@ const (
 
 	keyEvent = 0x0001
 )
+
+var procReadConsoleInput = kernel32.NewProc("ReadConsoleInputW")
 
 type inputRecord struct {
 	EventType uint16
@@ -36,8 +30,9 @@ type inputRecord struct {
 }
 
 type menuItem struct {
-	label  string
-	action func()
+	label string
+	// action returns true if the menu should wait for Enter before redrawing.
+	action func() bool
 }
 
 func enableVT() func() {
@@ -53,26 +48,55 @@ func interactiveMenu() {
 	defer restoreVT()
 
 	ensureConfigExists()
-	active := getActiveName()
 
-	fmt.Println("STALCRAFT JVM Optimization Wrapper")
-	fmt.Println("-----------------------------------")
-	fmt.Printf("Active config: %s\n", active)
-	fmt.Println()
-	fmt.Println("RU: Стрелки для выбора, Enter для подтверждения.")
-	fmt.Println("EN: Arrow keys to select, Enter to confirm.")
-	fmt.Println()
+	for {
+		active := getActiveName()
 
-	items := []menuItem{
-		{"Install", install},
-		{"Uninstall", uninstall},
-		{"Status", status},
-		{"Select Config", selectConfigMenu},
-		{"Regenerate Config", regenerateConfig},
-		{"Exit", func() { os.Exit(0) }},
+		fmt.Println("STALCRAFT JVM Optimization Wrapper")
+		fmt.Println("-----------------------------------")
+		fmt.Printf("Active config: %s\n", active)
+		fmt.Println()
+		fmt.Println("RU: Стрелки для выбора, Enter для подтверждения.")
+		fmt.Println("EN: Arrow keys to select, Enter to confirm.")
+		fmt.Println()
+
+		exit := false
+		items := []menuItem{
+			{"Install", elevatedAction("--install", "install")},
+			{"Uninstall", elevatedAction("--uninstall", "uninstall")},
+			{"Status", func() bool { status(); return true }},
+			{"Select Config", func() bool { selectConfigMenu(); return false }},
+			{"Regenerate Config", func() bool { regenerateConfig(); return true }},
+			{"Exit", func() bool { exit = true; return false }},
+		}
+
+		wait := runMenu(items)
+		if exit {
+			return
+		}
+
+		if wait {
+			fmt.Println()
+			fmt.Println("Press Enter to continue...")
+			fmt.Scanln()
+		}
+		fmt.Print("\033[2J\033[H")
 	}
+}
 
-	runMenu(items, true)
+func elevatedAction(flag, label string) func() bool {
+	return func() bool {
+		fmt.Printf("[%s] Requesting administrator privileges...\n", label)
+		code, err := runElevated(flag)
+		if err != nil {
+			fmt.Printf("[error] %v\n", err)
+		} else if code != 0 {
+			fmt.Printf("[error] %s failed (exit code %d)\n", label, code)
+		} else {
+			fmt.Printf("[%s] Done.\n", label)
+		}
+		return true
+	}
 }
 
 func selectConfigMenu() {
@@ -90,16 +114,17 @@ func selectConfigMenu() {
 		if n == active {
 			label = "* " + n
 		}
-		items = append(items, menuItem{label, func() {
+		items = append(items, menuItem{label, func() bool {
 			setActiveConfig(n)
 			fmt.Printf("[config] Active config set to: %s\n", n)
+			return false
 		}})
 	}
-	items = append(items, menuItem{"< Back", func() {}})
+	items = append(items, menuItem{"< Back", func() bool { return false }})
 
 	fmt.Println()
 	fmt.Println("Select config (* = active):")
-	runMenu(items, false)
+	runMenu(items)
 }
 
 func regenerateConfig() {
@@ -119,15 +144,25 @@ func regenerateConfig() {
 		fmt.Println("[config] Profile: standard")
 	}
 
+	if cfg.HeapSizeGB == 0 {
+		fmt.Println("[warning] Not enough free RAM for JVM optimization.")
+		fmt.Println("[warning] Make sure the page file is enabled and close unnecessary programs.")
+	} else {
+		totalGB := bytesToGB(sys.TotalRAM)
+		if totalGB <= 16 {
+			fmt.Println("[warning] 16 GB RAM: enable the page file to avoid memory issues.")
+		}
+	}
+
 	if err := saveConfigAs(cfg, "default"); err != nil {
-		fmt.Fprintf(os.Stderr, "[config] Failed to save: %v\n", err)
+		fmt.Printf("[error] Failed to save: %v\n", err)
 		return
 	}
 	setActiveConfig("default")
 	fmt.Println("[config] Regenerated default config.")
 }
 
-func runMenu(items []menuItem, waitAfter bool) {
+func runMenu(items []menuItem) bool {
 	hIn, _, _ := procGetStdHandle.Call(stdInputHandle)
 	hOut, _, _ := procGetStdHandle.Call(stdOutputHandle)
 
@@ -160,15 +195,10 @@ func runMenu(items []menuItem, waitAfter bool) {
 		case 0x0D: // VK_RETURN
 			clearMenu(len(items))
 			procSetConsoleMode.Call(hIn, uintptr(oldMode))
-			items[selected].action()
-			if waitAfter {
-				fmt.Print("\nPress Enter to exit...")
-				fmt.Scanln()
-			}
-			return
+			return items[selected].action()
 		case 0x1B: // VK_ESCAPE
 			clearMenu(len(items))
-			return
+			return false
 		default:
 			continue
 		}

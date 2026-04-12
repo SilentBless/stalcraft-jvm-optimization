@@ -63,34 +63,26 @@ type Config struct {
 	UseLargePages bool `json:"use_large_pages"`
 }
 
-// wrapperDir returns the directory where the wrapper exe lives.
-func wrapperDir() string {
-	self, err := os.Executable()
-	if err != nil {
-		return "."
-	}
-	return filepath.Dir(self)
-}
+const registryPath = `Software\StalcraftWrapper`
 
 func configsDir() string {
-	return filepath.Join(wrapperDir(), "configs")
+	self, err := os.Executable()
+	if err != nil {
+		return filepath.Join(".", "configs")
+	}
+	return filepath.Join(filepath.Dir(self), "configs")
 }
-
-const registryPath = `Software\StalcraftWrapper`
 
 func ensureConfigExists() {
 	dir := configsDir()
 	os.MkdirAll(dir, 0755)
 
-	// If no configs at all, generate default
 	entries, _ := filepath.Glob(filepath.Join(dir, "*.json"))
 	if len(entries) == 0 {
-		sys := detectSystem()
-		cfg := generateConfig(sys)
+		cfg := generateConfig(detectSystem())
 		saveConfigAs(cfg, "default")
 	}
 
-	// If no active config in registry, set to default
 	if getActiveName() == "" {
 		setActiveConfig("default")
 	}
@@ -153,6 +145,7 @@ func generateConfig(sys SystemInfo) Config {
 		cfg.GCTimeRatio = 19
 
 		cfg.ReservedCodeCacheSizeMB = 256
+		cfg.DontCompileHugeMethods = true
 	}
 
 	return cfg
@@ -165,8 +158,7 @@ func saveConfigAs(cfg Config, name string) error {
 	}
 	dir := configsDir()
 	os.MkdirAll(dir, 0755)
-	path := filepath.Join(dir, name+".json")
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(filepath.Join(dir, name+".json"), data, 0644)
 }
 
 func loadActiveConfig() (Config, bool) {
@@ -174,13 +166,12 @@ func loadActiveConfig() (Config, bool) {
 	if name == "" {
 		name = "default"
 	}
-	path := filepath.Join(configsDir(), name+".json")
-	cfgData, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Join(configsDir(), name+".json"))
 	if err != nil {
 		return Config{}, false
 	}
 	var cfg Config
-	if err := json.Unmarshal(cfgData, &cfg); err != nil {
+	if err := json.Unmarshal(data, &cfg); err != nil {
 		return Config{}, false
 	}
 	return cfg, true
@@ -193,16 +184,6 @@ func setActiveConfig(name string) {
 	}
 	defer key.Close()
 	key.SetStringValue("ActiveConfig", name)
-}
-
-func listConfigs() []string {
-	entries, _ := filepath.Glob(filepath.Join(configsDir(), "*.json"))
-	names := make([]string, 0, len(entries))
-	for _, e := range entries {
-		base := filepath.Base(e)
-		names = append(names, base[:len(base)-len(".json")])
-	}
-	return names
 }
 
 func getActiveName() string {
@@ -218,6 +199,16 @@ func getActiveName() string {
 	return val
 }
 
+func listConfigs() []string {
+	entries, _ := filepath.Glob(filepath.Join(configsDir(), "*.json"))
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		base := filepath.Base(e)
+		names = append(names, base[:len(base)-len(".json")])
+	}
+	return names
+}
+
 func calcHeap(sys SystemInfo) uint64 {
 	free := bytesToGB(sys.FreeRAM)
 	total := bytesToGB(sys.TotalRAM)
@@ -227,8 +218,8 @@ func calcHeap(sys SystemInfo) uint64 {
 	}
 
 	heap := free / 2
-	if heap < 6 {
-		heap = 6
+	if heap < 4 {
+		heap = 4
 	}
 	if heap > 8 {
 		heap = 8
@@ -239,15 +230,11 @@ func calcHeap(sys SystemInfo) uint64 {
 func calcGCThreads(sys SystemInfo) (parallel, concurrent int) {
 	cores := sys.CPUCores
 
-	// Parallel: only active during STW (app is frozen anyway)
-	// Use half the cores — enough to make pauses short
 	parallel = cores / 2
 	if parallel < 2 {
 		parallel = 2
 	}
 
-	// Concurrent: runs alongside the game, keep low
-	// 1 thread per 4 cores, minimum 1
 	concurrent = cores / 4
 	if concurrent < 1 {
 		concurrent = 1

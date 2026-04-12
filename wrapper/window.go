@@ -6,13 +6,6 @@ import (
 	"unsafe"
 )
 
-const (
-	wsVisible      = 0x10000000
-	wsPopup        = 0x80000000
-	wsExToolWindow = 0x00000080
-	wsExLayered    = 0x00080000
-)
-
 type wndClassExW struct {
 	Size       uint32
 	Style      uint32
@@ -54,9 +47,9 @@ func createPhantomWindow() {
 		user32.NewProc("RegisterClassExW").Call(uintptr(unsafe.Pointer(&wc)))
 
 		hwnd, _, _ := user32.NewProc("CreateWindowExW").Call(
-			wsExToolWindow|wsExLayered,
+			0x00000080|0x00080000, // WS_EX_TOOLWINDOW | WS_EX_LAYERED
 			uintptr(unsafe.Pointer(className)), 0,
-			wsVisible|wsPopup,
+			0x10000000|0x80000000, // WS_VISIBLE | WS_POPUP
 			0, 0, 0, 0, 0, 0, 0, 0,
 		)
 		user32.NewProc("SetLayeredWindowAttributes").Call(hwnd, 0, 0, 0x02)
