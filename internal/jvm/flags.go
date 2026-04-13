@@ -1,19 +1,31 @@
-package main
+// Package jvm turns a config.Config into the JVM command-line flags
+// STALCRAFT expects, and filters out any conflicting flags the game
+// launcher already supplied.
+package jvm
 
 import (
 	"fmt"
-	"math"
+
+	"github.com/EXBO-Community/stalcraft-jvm-optimization/internal/config"
 )
 
-func generateFlagsFromConfig(cfg Config) []string {
+// Flags renders the tuning profile as a list of -X / -XX: flags.
+func Flags(cfg config.Config) []string {
 	cc := cfg.ReservedCodeCacheSizeMB
 	if cc == 0 {
 		cc = 256
 	}
 
+	// Xms tracks STALCRAFT's real peak working set (~4 GB) while Xmx
+	// keeps the spare address space from sizeHeap as headroom. PreTouch
+	// warms Xms pages, so the hot path never faults.
+	xms := cfg.HeapSizeGB
+	if xms > 4 {
+		xms = 4
+	}
 	flags := []string{
 		fmt.Sprintf("-Xmx%dg", cfg.HeapSizeGB),
-		fmt.Sprintf("-Xms%dg", int(max(4, math.Round(float64(cfg.HeapSizeGB/2))))),
+		fmt.Sprintf("-Xms%dg", xms),
 
 		fmt.Sprintf("-XX:MetaspaceSize=%dm", cfg.MetaspaceMB),
 		fmt.Sprintf("-XX:MaxMetaspaceSize=%dm", cfg.MetaspaceMB),
@@ -79,8 +91,10 @@ func generateFlagsFromConfig(cfg Config) []string {
 		flags = append(flags, fmt.Sprintf("-XX:InlineSmallCode=%d", cfg.InlineSmallCode))
 	}
 	if cfg.MaxNodeLimit > 0 && cfg.NodeLimitFudgeFactor > 0 {
-		flags = append(flags, fmt.Sprintf("-XX:NodeLimitFudgeFactor=%d", cfg.NodeLimitFudgeFactor))
-		flags = append(flags, fmt.Sprintf("-XX:MaxNodeLimit=%d", cfg.MaxNodeLimit))
+		flags = append(flags,
+			fmt.Sprintf("-XX:NodeLimitFudgeFactor=%d", cfg.NodeLimitFudgeFactor),
+			fmt.Sprintf("-XX:MaxNodeLimit=%d", cfg.MaxNodeLimit),
+		)
 	}
 	if cfg.NmethodSweepActivity > 0 {
 		flags = append(flags, fmt.Sprintf("-XX:NmethodSweepActivity=%d", cfg.NmethodSweepActivity))
@@ -102,6 +116,46 @@ func generateFlagsFromConfig(cfg Config) []string {
 	}
 	if cfg.UseLargePages {
 		flags = append(flags, "-XX:+UseLargePages")
+	}
+
+	// Reflection fast path — skip the 15-call interpreter warmup and
+	// compile the accessor bytecode immediately. Zero and negative
+	// values both mean "always compile"; we treat any non-positive
+	// value as a request to emit the flag.
+	flags = append(flags, fmt.Sprintf("-Dsun.reflect.inflationThreshold=%d", cfg.ReflectionInflationThreshold))
+
+	if cfg.AutoBoxCacheMax > 0 {
+		flags = append(flags, fmt.Sprintf("-XX:AutoBoxCacheMax=%d", cfg.AutoBoxCacheMax))
+	}
+	if cfg.UseThreadPriorities {
+		flags = append(flags, "-XX:+UseThreadPriorities")
+		if cfg.ThreadPriorityPolicy > 0 {
+			flags = append(flags, fmt.Sprintf("-XX:ThreadPriorityPolicy=%d", cfg.ThreadPriorityPolicy))
+		}
+	}
+	if !cfg.UseCounterDecay {
+		flags = append(flags, "-XX:-UseCounterDecay")
+	}
+	if cfg.CompileThresholdScaling > 0 && cfg.CompileThresholdScaling != 1.0 {
+		flags = append(flags, fmt.Sprintf("-XX:CompileThresholdScaling=%g", cfg.CompileThresholdScaling))
+	}
+
+	// Unified logging (JEP 158, JDK 9+). Captures:
+	//   gc*            — young/mixed/full/concurrent/humongous/ergo
+	//   safepoint      — every STW event, GC and non-GC (deopt, class
+	//                    redefinition, thread dump, ForceSafepoint…)
+	//   jit+compilation — each method compiled by C1/C2
+	//   deoptimization — C2 backing out of optimized code (rare but
+	//                    each one is a microfreeze)
+	//   metaspace      — metaspace pressure / resize events
+	//   codecache      — code cache fill level changes
+	// Path is relative to the game's working directory because -Xlog
+	// uses ':' as a separator and a Windows absolute path "C:\..."
+	// collides with the parser. Overhead is below 0.1%.
+	if cfg.EnableJVMLog {
+		flags = append(flags,
+			"-Xlog:gc*,safepoint,jit+compilation,deoptimization,metaspace,codecache:file=logs/jvm.log:time,uptime,level,tags:filecount=3,filesize=10M",
+		)
 	}
 
 	return flags
