@@ -34,7 +34,6 @@ jobs:
         run: go install github.com/tc-hib/go-winres@latest
 
       - name: Patch version from tag
-        working-directory: wrapper
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
@@ -56,21 +55,33 @@ jobs:
               json.dump(data, f, indent=2)
           "
 
-      - name: Embed version info
-        working-directory: wrapper
-        run: go-winres make
+      - name: Embed version info into both binaries
+        shell: bash
+        run: |
+          go-winres make
+          cp rsrc_windows_amd64.syso cmd/cli/
+          cp rsrc_windows_amd64.syso cmd/service/
 
       - name: Build
-        working-directory: wrapper
+        shell: bash
         env:
           GOOS: windows
           GOARCH: amd64
-        run: go build -o wrapper.exe -ldflags="-s -w" .
+        run: |
+          mkdir -p build
+          go build -trimpath -ldflags="-s -w" -o build/cli.exe     ./cmd/cli
+          go build -trimpath -ldflags="-s -w" -o build/service.exe ./cmd/service
+
+      - name: Package release zip
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path build/cli.exe, build/service.exe, examples `
+            -DestinationPath build/wrapper.zip `
+            -Force
 
       - name: Upload
         uses: softprops/action-gh-release@v2
         with:
           body: ${{ steps.changelog.outputs.body }}
-          files: |
-            wrapper/wrapper.exe
-            configs/*
+          files: build/wrapper.zip
