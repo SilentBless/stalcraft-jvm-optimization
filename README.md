@@ -69,7 +69,13 @@
    - Пример для Steam: `C:\Program Files\Steam\steamapps\common\STALCRAFT`
    - Пример для Лаунчера: `C:\Users\User\AppData\Roaming\EXBO`
    - Пример для EGS: `C:\Games\EGS Stalcraft\STALCRAFT`
-2. Создайте в папке с игрой каталог `jvm_wrapper`.
+2. Создайте в **корне директории лаунчера** каталог `jvm_wrapper`. Например, для лаунчера EXBO это `C:\Users\<имя_пользователя>\AppData\Roaming\EXBO\jvm_wrapper` — рядом с `ExboLink.exe` и каталогом `runtime/`, а **не** глубоко внутри `runtime/stalcraft/...`.
+
+   > [!TIP]
+   > Если не уверены, куда именно положить — вот как это должно выглядеть:
+   >
+   > ![Пример расположения папки jvm_wrapper в корне директории лаунчера EXBO](./docs/assets/install-folder-location.jpg)
+
 3. Скачайте [последнюю версию](../../releases/latest) и распакуйте `wrapper.zip` в папку `jvm_wrapper` — внутри должны оказаться `cli.exe`, `service.exe` и каталог `examples/`.
 4. Запустите `cli.exe`, в открывшемся меню выберите пункт `Install` при помощи стрелок и нажмите **Enter**.
 5. Появится UAC-запрос на права администратора — подтвердите его. Это нормально: установка перехвата IFEO пишется в `HKLM`, для чего требуются права администратора.

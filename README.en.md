@@ -66,7 +66,13 @@ The utility is installed **once** and automatically runs each time the game is l
     - Example for Steam: `C:\Program Files\Steam\steamapps\common\STALCRAFT`
     - Example for Launcher: `C:\Users\User\AppData\Roaming\EXBO`
     - Example for EGS: `C:\Games\EGS Stalcraft\STALCRAFT`
-2. Create a `jvm_wrapper` directory inside the game folder.
+2. Create a `jvm_wrapper` directory at the **root of the launcher folder**. For the EXBO launcher that's `C:\Users\<your-name>\AppData\Roaming\EXBO\jvm_wrapper` — sitting next to `ExboLink.exe` and the `runtime/` directory, **not** somewhere deeper inside `runtime/stalcraft/...`.
+
+   > [!TIP]
+   > If you're unsure where exactly to put it, here's what it should look like:
+   >
+   > ![Example of where the jvm_wrapper folder belongs at the root of the EXBO launcher directory](./docs/assets/install-folder-location.jpg)
+
 3. Download the [latest release](../../releases/latest) and extract `wrapper.zip` into `jvm_wrapper` — you should end up with `cli.exe`, `service.exe` and an `examples/` directory inside.
 4. Run `cli.exe`, select `Install` in the menu using the arrow keys and press **Enter**.
 5. A UAC prompt will appear — accept it. This is expected: the IFEO hook is written to `HKLM` which requires administrator privileges.
