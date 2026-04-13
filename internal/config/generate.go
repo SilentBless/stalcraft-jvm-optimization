@@ -17,19 +17,32 @@ func Generate(sys sysinfo.Info) Config {
 	heap := sizeHeap(sys.TotalGB())
 	parallel, concurrent := gcThreads(sys.CPUCores)
 	jit := jitProfile(sys)
+
+	// Throughput-first defaults for mainstream CPUs. A loose 50 ms
+	// pause target lets G1 pick natural-sized young collections
+	// instead of slicing them into smaller, more frequent pauses that
+	// miss a tighter target anyway. Pair it with a smaller young gen
+	// minimum and fewer but larger mixed GC cycles, and aggressive
+	// soft-reference cleanup to keep heap pressure down — this is
+	// the hand-tuned combo validated on a 9900KF at ~255 FPS stable
+	// versus ~233 FPS with the previous latency-biased defaults.
 	ihop := 20
-	// 40 ms is a realistic target on consumer CPUs with DDR4 / DDR5
-	// without V-Cache — setting it much lower just forces G1 to slice
-	// young GC into smaller, more frequent pauses and hurts throughput
-	// without actually reaching the target.
-	pauseMs := 40
+	pauseMs := 50
+	newSizePercent := 23
+	mixedCountTarget := 3
+	softRefMs := 25
+
 	if sys.HasBigCache() {
-		// On X3D-class CPUs we can start concurrent marking earlier —
-		// memory bandwidth headroom is effectively free, and earlier
-		// marking reduces the risk of mixed-GC pressure. The huge L3
-		// also lets G1 realistically hit a tighter pause target.
+		// X3D-class parts can realistically hit a tight pause budget
+		// and benefit from a slightly larger young gen plus longer
+		// soft-reference retention for texture caches. Memory bandwidth
+		// headroom lets us start concurrent marking earlier without
+		// fear of full GC pressure.
 		ihop = 15
 		pauseMs = 25
+		newSizePercent = 30
+		mixedCountTarget = 4
+		softRefMs = 50
 		if sys.CPUCores >= 8 {
 			concurrent++
 		}
@@ -42,11 +55,11 @@ func Generate(sys sysinfo.Info) Config {
 
 		MaxGCPauseMillis:               pauseMs,
 		G1HeapRegionSizeMB:             regionSize(heap),
-		G1NewSizePercent:               30,
+		G1NewSizePercent:               newSizePercent,
 		G1MaxNewSizePercent:            50,
 		G1ReservePercent:               20,
 		G1HeapWastePercent:             5,
-		G1MixedGCCountTarget:           4,
+		G1MixedGCCountTarget:           mixedCountTarget,
 		InitiatingHeapOccupancyPercent: ihop,
 		G1MixedGCLiveThresholdPercent:  90,
 		G1RSetUpdatingPauseTimePercent: 0,
@@ -62,7 +75,7 @@ func Generate(sys sysinfo.Info) Config {
 
 		ParallelGCThreads:       parallel,
 		ConcGCThreads:           concurrent,
-		SoftRefLRUPolicyMSPerMB: 50,
+		SoftRefLRUPolicyMSPerMB: softRefMs,
 
 		ReservedCodeCacheSizeMB: 400,
 		MaxInlineLevel:          jit.maxInlineLevel,
@@ -148,10 +161,13 @@ func sizeHeap(totalGB uint64) uint64 {
 // physical cores, and cap at 10 where G1 hits diminishing returns.
 //
 // Concurrent workers share CPU with the running game, so they stay
-// a bit more conservative: roughly half of parallel, floor 1, ceiling 4.
+// a bit more conservative: roughly half of parallel, floor 1, ceiling 5.
+// The ceiling was bumped from 4 to 5 after a 9900KF benchmark showed
+// that 5 concurrent workers (matching the hand-tuned max.json preset)
+// materially outperformed 4 under sustained allocation pressure.
 func gcThreads(cores int) (parallel, concurrent int) {
 	parallel = clamp(cores*2-2, 2, 10)
-	concurrent = clamp(parallel/2, 1, 4)
+	concurrent = clamp(parallel/2, 1, 5)
 	return
 }
 
