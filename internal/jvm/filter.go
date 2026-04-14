@@ -1,27 +1,33 @@
-package main
+package jvm
 
 import "strings"
 
-var exactRemove = map[string]bool{
-	"-XX:-PrintCommandLineFlags":        true,
-	"-XX:+UseG1GC":                      true,
-	"-XX:+UseCompressedOops":            true,
-	"-XX:+PerfDisableSharedMem":         true,
-	"-XX:+UseBiasedLocking":             true,
-	"-XX:-UseBiasedLocking":             true,
-	"-XX:+UseStringDeduplication":        true,
-	"-XX:+UseNUMA":                      true,
-	"-XX:+DisableAttachMechanism":        true,
-	"-XX:+UseDynamicNumberOfGCThreads":   true,
-	"-XX:+AlwaysActAsServerClassMachine": true,
-	"-XX:+UseXMMForArrayCopy":           true,
-	"-XX:+UseFPUForSpilling":            true,
-	"-XX:-DontCompileHugeMethods":       true,
-	"-XX:+AlwaysPreTouch":               true,
-	"-XX:+ParallelRefProcEnabled":        true,
-	"-XX:+DisableExplicitGC":            true,
-	"-XX:+G1UseAdaptiveIHOP":            true,
-	"-XX:+UnlockExperimentalVMOptions":  true,
+var exactRemove = map[string]struct{}{
+	"-XX:-PrintCommandLineFlags":         {},
+	"-XX:+UseG1GC":                       {},
+	"-XX:+UseCompressedOops":             {},
+	"-XX:+PerfDisableSharedMem":          {},
+	"-XX:+UseBiasedLocking":              {},
+	"-XX:-UseBiasedLocking":              {},
+	"-XX:+UseStringDeduplication":        {},
+	"-XX:+UseNUMA":                       {},
+	"-XX:+DisableAttachMechanism":        {},
+	"-XX:+UseDynamicNumberOfGCThreads":   {},
+	"-XX:+AlwaysActAsServerClassMachine": {},
+	"-XX:+UseXMMForArrayCopy":            {},
+	"-XX:+UseFPUForSpilling":             {},
+	"-XX:-DontCompileHugeMethods":        {},
+	"-XX:+AlwaysPreTouch":                {},
+	"-XX:+ParallelRefProcEnabled":        {},
+	"-XX:+DisableExplicitGC":             {},
+	"-XX:+G1UseAdaptiveIHOP":             {},
+	"-XX:+UnlockExperimentalVMOptions":   {},
+	"-XX:+UseThreadPriorities":           {},
+	"-XX:-UseThreadPriorities":           {},
+	"-XX:+UseCounterDecay":               {},
+	"-XX:-UseCounterDecay":               {},
+	"-XX:+UseLargePages":                 {},
+	"-XX:-UseLargePages":                 {},
 }
 
 var prefixRemove = []string{
@@ -58,10 +64,16 @@ var prefixRemove = []string{
 	"-XX:NmethodSweepActivity=",
 	"-XX:AllocatePrefetchStyle=",
 	"-XX:LargePageSizeInBytes=",
+	"-XX:AutoBoxCacheMax=",
+	"-XX:ThreadPriorityPolicy=",
+	"-XX:CompileThresholdScaling=",
+	"-Dsun.reflect.inflationThreshold=",
 	"-Xms",
 	"-Xmx",
 }
 
+// splitArgs partitions the launcher's argv into JVM flags, the main class,
+// and arguments passed to main().
 func splitArgs(args []string) (jvm []string, mainClass string, app []string) {
 	for i := 0; i < len(args); {
 		a := args[i]
@@ -87,7 +99,7 @@ func splitArgs(args []string) (jvm []string, mainClass string, app []string) {
 }
 
 func shouldRemove(arg string) bool {
-	if exactRemove[arg] {
+	if _, ok := exactRemove[arg]; ok {
 		return true
 	}
 	for _, p := range prefixRemove {
@@ -98,15 +110,19 @@ func shouldRemove(arg string) bool {
 	return false
 }
 
-func filterArgs(orig, injected []string) []string {
-	jvm, mainClass, app := splitArgs(orig)
+// FilterArgs strips launcher-injected flags that conflict with ours,
+// then splices the generated flags back in, preserving the original
+// main class and app arguments.
+func FilterArgs(orig, injected []string) []string {
+	jvmArgs, mainClass, app := splitArgs(orig)
 
-	var filtered []string
-	for _, a := range jvm {
+	filtered := make([]string, 0, len(jvmArgs))
+	for _, a := range jvmArgs {
 		if !shouldRemove(a) {
 			filtered = append(filtered, a)
 		}
 	}
+
 	result := make([]string, 0, len(filtered)+len(injected)+1+len(app))
 	result = append(result, filtered...)
 	result = append(result, injected...)

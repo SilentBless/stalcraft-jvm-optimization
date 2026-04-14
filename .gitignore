@@ -4,7 +4,6 @@
 *.o
 *.syso
 
-wrapper/wrapper
 build/
 
 __debug_bin*
@@ -18,5 +17,3 @@ __debug_bin*
 
 .env
 *.log
-
-docs/
