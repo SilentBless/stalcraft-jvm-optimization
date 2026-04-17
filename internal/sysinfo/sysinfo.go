@@ -25,7 +25,12 @@ type Info struct {
 	// L3CacheMB is the largest unified L3 cache reported by Windows. On
 	// multi-CCD CPUs (e.g. 5950X) this is the per-CCD size, not the sum,
 	// since a hot thread only benefits from its own CCD's cache.
-	L3CacheMB     int
+	L3CacheMB int
+	// MemSpeedMTs is the highest ConfiguredMemoryClockSpeed reported
+	// across populated DIMMs, in MT/s. Zero means the SMBIOS probe
+	// failed or no DIMM is populated; the caller should treat that as
+	// "unknown" and fall back to the mid memory tier.
+	MemSpeedMTs   int
 	LargePages    bool
 	LargePageSize uint64
 }
@@ -63,9 +68,10 @@ type memoryStatusEx struct {
 // the caller can still size the JVM.
 func Detect() Info {
 	info := Info{
-		CPUCores:   physicalCores(),
-		CPUThreads: runtime.NumCPU(),
-		L3CacheMB:  detectL3CacheMB(),
+		CPUCores:    physicalCores(),
+		CPUThreads:  runtime.NumCPU(),
+		L3CacheMB:   detectL3CacheMB(),
+		MemSpeedMTs: detectMemSpeedMTs(),
 	}
 
 	var ms memoryStatusEx
@@ -207,6 +213,9 @@ func (i Info) Describe() string {
 	s := fmt.Sprintf("%d cores, %.1f GB RAM (%.1f GB free)", i.CPUCores, i.TotalRAMGB(), i.FreeRAMGB())
 	if i.L3CacheMB > 0 {
 		s += fmt.Sprintf(", L3 %d MB", i.L3CacheMB)
+	}
+	if i.MemSpeedMTs > 0 {
+		s += fmt.Sprintf(", %d MT/s", i.MemSpeedMTs)
 	}
 	if i.LargePages {
 		s += ", large pages available"
