@@ -1,8 +1,5 @@
 # Бенчмарки сообщества
 
-[![eng](https://img.shields.io/badge/lang-English-blue)](./BENCHMARKS.en.md)
-[![ru](https://img.shields.io/badge/lang-Russian-blue)](./BENCHMARKS.md)
-
 Этот документ описывает, как снять стандартизированный замер производительности STALCRAFT и прикрепить его к [Discussions](../../discussions) для валидации JVM-тюнинга на железе, до которого у нас нет доступа.
 
 ## Что собирается и что НЕ собирается

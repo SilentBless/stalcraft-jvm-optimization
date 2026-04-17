@@ -1,8 +1,5 @@
 # Community benchmarks
 
-[![eng](https://img.shields.io/badge/lang-English-blue)](./BENCHMARKS.en.md)
-[![ru](https://img.shields.io/badge/lang-Russian-blue)](./BENCHMARKS.md)
-
 This document describes how to capture a standardised STALCRAFT performance recording and attach it to [Discussions](../../discussions) so the JVM tuning profile can be validated on hardware we don't own.
 
 ## What is collected — and what is NOT
