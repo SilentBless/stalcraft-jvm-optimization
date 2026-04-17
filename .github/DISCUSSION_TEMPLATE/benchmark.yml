@@ -6,7 +6,7 @@ body:
       value: |
         Спасибо за вклад в проект!
 
-        **Перед отправкой** прочитайте [BENCHMARKS.md](../blob/master/docs/BENCHMARKS.md) — там описан протокол теста. Соблюдение протокола критично: иначе данные не сравнимы с другими замерами.
+        **Перед отправкой** прочитайте [BENCHMARKS.md](https://github.com/EXBO-Community/stalcraft-jvm-optimization/blob/master/docs/BENCHMARKS.md) — там описан протокол теста. Соблюдение протокола критично: иначе данные не сравнимы с другими замерами.
 
   - type: checkboxes
     id: prerequisites

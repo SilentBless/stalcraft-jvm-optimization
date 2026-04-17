@@ -62,7 +62,7 @@ Open [Discussions → Benchmark Submission](../../discussions/new?category=bench
 
 - **Config content** — the JSON from `jvm_wrapper/configs/<name>.json`, paste it into the "Config" field.
 - **Links to CapFrameX JSON recordings** — upload to GitHub (drag-and-drop into the Discussion), Google Drive, or any file host with a direct link. Hardware specs (CPU, GPU, RAM MT/s, OS, drivers) are already embedded in the capture — no need to retype them.
-- **A short subjective note** — "smooth", "occasional hitches", "crowd-fight stutter on morytnik". Numbers matter, perception matters too — especially if the three runs had noticeably different player counts on screen (say 2 people on average vs 5–6).
+- **A short subjective note** — "smooth", "occasional hitches", "crowd-fight stutter on Морятник". Numbers matter, perception matters too — especially if the three runs had noticeably different player counts on screen (say 2 people on average vs 5–6).
 
 ## Why this helps
 
