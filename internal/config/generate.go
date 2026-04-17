@@ -57,21 +57,33 @@ func Generate(sys sysinfo.Info) Config {
 		pauseMs = 150
 		mixedCountTarget = 4
 		rsetUpdatingPct = 5
-		newSizePercent = 25
+		newSizePercent = 30
 	case sysinfo.MemFast:
 		pauseMs = 80
 		mixedCountTarget = 8
 		rsetUpdatingPct = 10
-		newSizePercent = 30
+		newSizePercent = 35
 	default: // MemMid and unknown
 		pauseMs = 100
 		mixedCountTarget = 6
 		rsetUpdatingPct = 8
-		newSizePercent = 28
+		newSizePercent = 33
 	}
 
-	ihop := 35
+	// Combat-biased baseline: STALCRAFT is effectively always in combat
+	// (projectile events, hit registration, particle bursts, AI ticks).
+	// An earlier ihop of 35 and tenuring of 6 optimised for idle /
+	// animation-heavy states and left combat bursts to spill into the
+	// old gen mid-fight, producing the 1-second stalls a 5700X +
+	// DDR4-3600 tester reported. Lower IHOP starts concurrent marking
+	// before the burst fills old gen; tenuring=3 lets short-lived combat
+	// objects die in survivor before being force-promoted; a larger
+	// survivor (ratio 12 instead of the Oracle default 8) absorbs the
+	// burst without overflowing into old gen in the first place.
+	ihop := 25
 	softRefMs := 50
+	tenuring := 3
+	survivorRatio := 12
 
 	if sys.HasBigCache() {
 		// X3D-class parts can hit a tighter pause target thanks to
@@ -80,15 +92,18 @@ func Generate(sys sysinfo.Info) Config {
 		// the larger working set V-Cache can absorb.
 		pauseMs /= 2
 		softRefMs = 100
-		// Extra concurrent worker only if the OS exposes at least 16
-		// logical threads. The naive "cores >= 8" check fires on a
-		// 5800X3D / 7800X3D running in "gaming mode" with SMT disabled
-		// (8C/8T) and pushes concurrent to 4 — that's 50 % of the CPU
-		// taken from the game during marking. Requiring 16+ threads
-		// guarantees at least one HT sibling pool to absorb the extra
-		// worker without starving the render thread.
+		// V-Cache is the render thread's hottest asset. Community
+		// testing on a 9800X3D + DDR5-6200 rig showed that running
+		// 4-5 concurrent GC workers at 280+ FPS causes perceived
+		// stutter even when frametime stays flat, because concurrent
+		// marking evicts render-thread cache lines. Cap hard at 2
+		// workers (3 on 16+ thread parts) to leave the V-Cache to the
+		// game and rely on UseDynamicNumberOfGCThreads to scale up
+		// only under real allocation pressure.
 		if sys.CPUThreads >= 16 {
-			concurrent++
+			concurrent = 3
+		} else {
+			concurrent = 2
 		}
 	}
 
@@ -107,8 +122,8 @@ func Generate(sys sysinfo.Info) Config {
 		InitiatingHeapOccupancyPercent: ihop,
 		G1MixedGCLiveThresholdPercent:  85,
 		G1RSetUpdatingPauseTimePercent: rsetUpdatingPct,
-		SurvivorRatio:                  8,
-		MaxTenuringThreshold:           6,
+		SurvivorRatio:                  survivorRatio,
+		MaxTenuringThreshold:           tenuring,
 
 		G1SATBBufferEnqueueingThresholdPercent: 30,
 		G1ConcRSHotCardLimit:                   16,
@@ -205,13 +220,12 @@ func sizeHeap(totalGB uint64) uint64 {
 // where G1 hits diminishing returns on consumer hardware.
 //
 // Concurrent workers share CPU with the running game, so they stay
-// a bit more conservative: roughly half of parallel, floor 1, ceiling 4.
-// The earlier ceiling of 5 was chosen to match a static-scene FPS
-// benchmark on a 9900KF, but in dynamic scenes the extra worker
-// competed with the render thread during concurrent marking and added
-// small stutters. Four workers leaves at least two logical threads for
-// the game on any 12+ thread CPU, and UseDynamicNumberOfGCThreads
-// scales the actual count up under real allocation pressure anyway.
+// a bit more conservative: roughly half of parallel, floor 1, ceiling 5.
+// Non-X3D parts can soak five concurrent workers under combat-burst
+// allocation pressure without the render thread noticing — cache
+// contention is not the bottleneck when L3 is modest. X3D parts get
+// their concurrent count clamped tighter inside Generate() because
+// V-Cache contention is the real cost there, not raw throughput.
 //
 // Using logical threads (runtime.NumCPU) instead of physical_cores×2
 // is essential for correctness on CPUs without SMT/HT: an Intel
@@ -220,7 +234,7 @@ func sizeHeap(totalGB uint64) uint64 {
 // overhead wipes out the throughput gain from extra workers.
 func gcThreads(threads int) (parallel, concurrent int) {
 	parallel = clamp(threads-2, 2, 10)
-	concurrent = clamp(parallel/2, 1, 4)
+	concurrent = clamp(parallel/2, 1, 5)
 	return
 }
 
