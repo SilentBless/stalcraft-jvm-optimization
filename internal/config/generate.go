@@ -18,31 +18,38 @@ func Generate(sys sysinfo.Info) Config {
 	parallel, concurrent := gcThreads(sys.CPUThreads)
 	jit := jitProfile(sys)
 
-	// Throughput-first defaults for mainstream CPUs. A loose 50 ms
-	// pause target lets G1 pick natural-sized young collections
-	// instead of slicing them into smaller, more frequent pauses that
-	// miss a tighter target anyway. Pair it with a smaller young gen
-	// minimum and fewer but larger mixed GC cycles, and aggressive
-	// soft-reference cleanup to keep heap pressure down — this is
-	// the hand-tuned combo validated on a 9900KF at ~255 FPS stable
-	// versus ~233 FPS with the previous latency-biased defaults.
-	ihop := 20
-	pauseMs := 50
-	newSizePercent := 23
-	mixedCountTarget := 3
-	softRefMs := 25
+	// Frame-pacing-first defaults aligned with OpenJDK G1 tuning
+	// guidance and in-game CapFrameX measurements. The earlier
+	// "throughput-first" profile (pauseMs=50, mixedCountTarget=3,
+	// survivorRatio=32, tenuring=1) won a static-scene FPS benchmark
+	// but regressed p99 frametime in dynamic scenes. These values
+	// prioritise pause distribution over peak throughput:
+	//
+	//   * pauseMs=100       — realistic on mainstream DDR4/DDR5; G1
+	//                         stops slicing young collections into
+	//                         many tiny pauses that miss a tight goal.
+	//   * mixedCountTarget=8 — Oracle default; mixed-GC work spread
+	//                         across more passes, each pause shorter.
+	//   * ihop=35           — start concurrent marking before the
+	//                         45 % default but far enough from 0 %
+	//                         to avoid continuous mark overhead.
+	//   * survivorRatio=8, tenuring=6 — mid-lived allocations (NPC
+	//                         state, animation caches in .obj-mesh
+	//                         rendering) die in survivor instead of
+	//                         being force-promoted to old gen.
+	ihop := 35
+	pauseMs := 100
+	newSizePercent := 30
+	mixedCountTarget := 8
+	softRefMs := 50
 
 	if sys.HasBigCache() {
-		// X3D-class parts can realistically hit a tight pause budget
-		// and benefit from a slightly larger young gen plus longer
-		// soft-reference retention for texture caches. Memory bandwidth
-		// headroom lets us start concurrent marking earlier without
-		// fear of full GC pressure.
-		ihop = 15
-		pauseMs = 25
-		newSizePercent = 30
-		mixedCountTarget = 4
-		softRefMs = 50
+		// X3D-class parts can hit a tighter pause target thanks to
+		// the huge L3 and high memory bandwidth headroom. Soft-ref
+		// retention is extended so texture caches stay hot across
+		// the larger working set V-Cache can absorb.
+		pauseMs = 50
+		softRefMs = 100
 		// Extra concurrent worker only if the OS exposes at least 16
 		// logical threads. The naive "cores >= 8" check fires on a
 		// 5800X3D / 7800X3D running in "gaming mode" with SMT disabled
@@ -64,21 +71,21 @@ func Generate(sys sysinfo.Info) Config {
 		G1HeapRegionSizeMB:             regionSize(heap),
 		G1NewSizePercent:               newSizePercent,
 		G1MaxNewSizePercent:            50,
-		G1ReservePercent:               20,
-		G1HeapWastePercent:             5,
+		G1ReservePercent:               15,
+		G1HeapWastePercent:             10,
 		G1MixedGCCountTarget:           mixedCountTarget,
 		InitiatingHeapOccupancyPercent: ihop,
-		G1MixedGCLiveThresholdPercent:  90,
-		G1RSetUpdatingPauseTimePercent: 0,
-		SurvivorRatio:                  32,
-		MaxTenuringThreshold:           1,
+		G1MixedGCLiveThresholdPercent:  85,
+		G1RSetUpdatingPauseTimePercent: 10,
+		SurvivorRatio:                  8,
+		MaxTenuringThreshold:           6,
 
 		G1SATBBufferEnqueueingThresholdPercent: 30,
 		G1ConcRSHotCardLimit:                   16,
 		G1ConcRefinementServiceIntervalMillis:  150,
 		GCTimeRatio:                            99,
 		UseDynamicNumberOfGCThreads:            true,
-		UseStringDeduplication:                 true,
+		UseStringDeduplication:                 false,
 
 		ParallelGCThreads:       parallel,
 		ConcGCThreads:           concurrent,
@@ -168,10 +175,13 @@ func sizeHeap(totalGB uint64) uint64 {
 // where G1 hits diminishing returns on consumer hardware.
 //
 // Concurrent workers share CPU with the running game, so they stay
-// a bit more conservative: roughly half of parallel, floor 1, ceiling 5.
-// A 9900KF benchmark showed that 5 concurrent workers (matching the
-// hand-tuned max.json preset) materially outperformed 4 under
-// sustained allocation pressure, hence the bump from 4 to 5.
+// a bit more conservative: roughly half of parallel, floor 1, ceiling 4.
+// The earlier ceiling of 5 was chosen to match a static-scene FPS
+// benchmark on a 9900KF, but in dynamic scenes the extra worker
+// competed with the render thread during concurrent marking and added
+// small stutters. Four workers leaves at least two logical threads for
+// the game on any 12+ thread CPU, and UseDynamicNumberOfGCThreads
+// scales the actual count up under real allocation pressure anyway.
 //
 // Using logical threads (runtime.NumCPU) instead of physical_cores×2
 // is essential for correctness on CPUs without SMT/HT: an Intel
@@ -180,25 +190,24 @@ func sizeHeap(totalGB uint64) uint64 {
 // overhead wipes out the throughput gain from extra workers.
 func gcThreads(threads int) (parallel, concurrent int) {
 	parallel = clamp(threads-2, 2, 10)
-	concurrent = clamp(parallel/2, 1, 5)
+	concurrent = clamp(parallel/2, 1, 4)
 	return
 }
 
 // regionSize matches G1 region granularity to heap size. JVM only
 // accepts powers of two between 1 and 32 MB; larger regions mean fewer
 // RSet scans, smaller regions mean finer mixed-GC control. sizeHeap
-// caps heap at 8 GB, so 16 MB is the upper choice in practice —
-// 32 MB regions would leave only 256 regions at 8 GB heap, hurting
-// mixed-GC selection granularity.
+// caps heap at 8 GB, and CapFrameX measurements on both an X3D with
+// 8 GB heap and an i5-10400F with 5 GB heap showed 8 MB regions
+// outperforming 16 MB — more regions gives mixed-GC selection finer
+// granularity so each pass evacuates a smaller, more focused set.
+// Stalcraft's large mesh data lives in LWJGL direct buffers off-heap,
+// so the 4 MB humongous threshold at 8 MB regions is not a concern.
 func regionSize(heapGB uint64) int {
-	switch {
-	case heapGB <= 3:
+	if heapGB <= 3 {
 		return 4
-	case heapGB <= 5:
-		return 8
-	default:
-		return 16
 	}
+	return 8
 }
 
 func clamp(v, lo, hi int) int {
