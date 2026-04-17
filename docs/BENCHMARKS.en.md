@@ -34,13 +34,14 @@ Conditions are identical across submissions — otherwise captures can't be comp
 
 ### 2. CapFrameX settings
 
-In CapFrameX → `Capture`:
+The settings live in two places. `Capture time` and `Capture delay` are on the main screen; the rest is under the gear icon in the top-right corner → **OPTIONS** tab.
 
 - **Capture time**: `360` seconds.
 - **Capture delay**: `5` seconds.
-- **Display-synced frametime measurement** *(exact option name and screenshots to be added)*: pick the setting that measures frametime against displayed frames rather than raw presents. This makes the numbers reflect what you actually see on screen.
+- **FPS graph filter (ms)**: `1000`.
+- **Use "MsBetweenDisplayChange" metrics**: enabled (checkbox). Makes CapFrameX measure frametime at the moment a frame hits the display rather than at raw present time — the numbers then reflect what the player actually sees.
 
-> Screenshots of the CapFrameX UI for these settings will be added later. Ask in the Discussion if unsure.
+![CapFrameX settings for a standardised capture](./assets/capframex-capture-settings.jpg)
 
 ### 3. Test scenario
 
