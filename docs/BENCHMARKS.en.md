@@ -53,12 +53,7 @@ Open [Discussions → Benchmark Submission](../../discussions/new?category=bench
 
 ## Why this helps
 
-JVM tuning is more hardware-dependent than it looks. Our own measurements only cover two specific rigs:
-
-- **9900X3D + DDR5-6000 + RTX 5080** — fast-tier X3D
-- **i5-10400F + DDR4-2666 + RTX 4060 Ti** — slow-tier non-X3D
-
-Between those two sits a huge range: DDR4-3200 / 3600, Zen 3/4 without V-Cache, older i7 / i9 parts with varied memory, laptops with LPDDR5. Community data lets us:
+JVM tuning is more hardware-dependent than it looks. Our own measurements are limited: a couple of test rigs can't cover the full range of DDR4 / DDR5, Zen 3/4, older Intel parts, laptop LPDDR5 and everything in between. Community data lets us:
 
 - Validate the **mid tier** profile, which nobody has benchmarked yet.
 - Catch regressions on uncommon configurations.
