@@ -1,0 +1,114 @@
+title: "[Benchmark] <CPU> + <RAM MT/s> + <config>"
+labels: ["benchmark", "community-data"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за вклад в проект!
+
+        **Перед отправкой** прочитайте [BENCHMARKS.md](../blob/master/docs/BENCHMARKS.md) — там описан протокол теста. Соблюдение протокола критично: иначе данные не сравнимы с другими замерами.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Обязательные проверки
+      options:
+        - label: Я прочитал BENCHMARKS.md
+          required: true
+        - label: Длительность записи = 360 секунд, задержка старта = 5 секунд
+          required: true
+        - label: Закрыл Discord / Telegram / оверлеи / OBS на время теста
+          required: true
+        - label: Тест на морятнике или аналогичной массовой локации, не на пустой карте
+          required: true
+        - label: Локация наполнилась игроками / NPC до старта записи (подождал минимум 1 минуту)
+          required: true
+
+  - type: input
+    id: cpu
+    attributes:
+      label: Процессор
+      placeholder: "AMD Ryzen 9 9900X3D"
+    validations:
+      required: true
+
+  - type: input
+    id: gpu
+    attributes:
+      label: Видеокарта
+      placeholder: "NVIDIA GeForce RTX 5080"
+    validations:
+      required: true
+
+  - type: input
+    id: ram
+    attributes:
+      label: ОЗУ — объём, тип, Configured Memory Clock Speed
+      description: |
+        Не рейтинг DIMM, а реальная сконфигурированная частота. Проверяется в CPU-Z (Memory → DRAM Frequency × 2) или в `cli.exe` (меню покажет строку `NNNN MT/s (<tier>)`).
+      placeholder: "32 ГБ DDR5 @ 6000 MT/s"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Версия Windows
+      placeholder: "Windows 11 23H2"
+    validations:
+      required: true
+
+  - type: input
+    id: wrapper-version
+    attributes:
+      label: Версия wrapper
+      description: Из `jvm_wrapper/logs/wrapper.log` или `cli.exe --status`.
+      placeholder: "v1.1.1"
+    validations:
+      required: true
+
+  - type: input
+    id: config-name
+    attributes:
+      label: Имя активного конфига
+      placeholder: "default.json"
+    validations:
+      required: true
+
+  - type: textarea
+    id: config-body
+    attributes:
+      label: Содержимое конфига
+      description: JSON из `jvm_wrapper/configs/<имя>.json`.
+      render: json
+    validations:
+      required: true
+
+  - type: textarea
+    id: capframex-links
+    attributes:
+      label: Ссылки на CapFrameX JSON-записи
+      description: |
+        Перетащи файлы прямо в это поле (GitHub загрузит их) или вставь ссылки на Google Drive / файлообменник. Если прогонов несколько — перечисли все.
+    validations:
+      required: true
+
+  - type: textarea
+    id: perception
+    attributes:
+      label: Субъективные ощущения
+      description: |
+        "Плавно", "иногда тычки", "фризы в бою", "микрофризы при смене зоны" — что угодно, что ощущается во время игры. Метрики показывают цифры, но восприятие тоже важно.
+      placeholder: |
+        В толпе на морятнике ощущается плавно. Изредка дёргается при телепорте.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Дополнительные замечания
+      description: |
+        Антивирус, разгон, XMP/DOCP включён или нет, что-то необычное в окружении — всё, что может повлиять на результат.
+    validations:
+      required: false

@@ -50,6 +50,12 @@ The utility is installed **once** and automatically runs each time the game is l
 > Game files are not affected or modified.
 > The utility does not interfere with the game process and is not embedded in it.
 
+## Help the project — optional data collection
+
+If you want to help, capture a standardised CapFrameX recording and attach it to [Discussions](../../discussions). The recording **contains no personal data** (no paths, no IDs, no IPs) — only hardware model and frametime samples.
+
+Community data lets us validate JVM tuning on hardware we don't own. The test protocol is documented in [BENCHMARKS.en.md](./docs/BENCHMARKS.en.md) — conditions must be identical across submissions, otherwise results can't be compared.
+
 ## System Requirements
 
 - **Operating System:** Windows 10/11
