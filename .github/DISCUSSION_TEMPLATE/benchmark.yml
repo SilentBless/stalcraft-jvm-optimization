@@ -19,59 +19,16 @@ body:
           required: true
         - label: Закрыл Discord / Telegram / оверлеи / OBS на время теста
           required: true
-        - label: Тест на морятнике или аналогичной массовой локации, не на пустой карте
+        - label: Тест не на пустом морятнике
           required: true
-        - label: Локация наполнилась игроками / NPC до старта записи (подождал минимум 1 минуту)
+        - label: Локация наполнилась игроками до старта записи
           required: true
-
-  - type: input
-    id: cpu
-    attributes:
-      label: Процессор
-      placeholder: "AMD Ryzen 9 9900X3D"
-    validations:
-      required: true
-
-  - type: input
-    id: gpu
-    attributes:
-      label: Видеокарта
-      placeholder: "NVIDIA GeForce RTX 5080"
-    validations:
-      required: true
-
-  - type: input
-    id: ram
-    attributes:
-      label: ОЗУ — объём, тип, Configured Memory Clock Speed
-      description: |
-        Не рейтинг DIMM, а реальная сконфигурированная частота. Проверяется в CPU-Z (Memory → DRAM Frequency × 2) или в `cli.exe` (меню покажет строку `NNNN MT/s (<tier>)`).
-      placeholder: "32 ГБ DDR5 @ 6000 MT/s"
-    validations:
-      required: true
 
   - type: input
     id: os
     attributes:
       label: Версия Windows
       placeholder: "Windows 11 23H2"
-    validations:
-      required: true
-
-  - type: input
-    id: wrapper-version
-    attributes:
-      label: Версия wrapper
-      description: Из `jvm_wrapper/logs/wrapper.log` или `cli.exe --status`.
-      placeholder: "v1.1.1"
-    validations:
-      required: true
-
-  - type: input
-    id: config-name
-    attributes:
-      label: Имя активного конфига
-      placeholder: "default.json"
     validations:
       required: true
 
@@ -100,7 +57,7 @@ body:
       description: |
         "Плавно", "иногда тычки", "фризы в бою", "микрофризы при смене зоны" — что угодно, что ощущается во время игры. Метрики показывают цифры, но восприятие тоже важно.
       placeholder: |
-        В толпе на морятнике ощущается плавно. Изредка дёргается при телепорте.
+        В толпе на морятнике ощущается плавно. Изредка дёргается при повороте камерой.
     validations:
       required: false
 

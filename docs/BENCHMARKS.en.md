@@ -47,11 +47,10 @@ In CapFrameX → `Capture`:
 1. Launch STALCRAFT.
 2. Reach the character-select menu.
 3. **First login** into the game on a fresh session — freshly initialised JIT, warm but not saturated caches.
-4. Optionally disable non-essential HUD (compass, chats, map), keep what matters for smoothness perception.
-5. Teleport to **морятник (moryatnik)** — a busy naval area — or a comparably crowded location.
-6. Wait at least **1 minute** before starting the recording so the area populates with players / NPCs. Otherwise the first 2 of 6 minutes end up as effectively a static scene and the test becomes meaningless.
-7. Start the CapFrameX recording.
-8. Play normally for the full 360 seconds — combat, movement, interactions.
+4. Optionally disable non-essential HUD (compass, chats, kill feed).
+5. Join a session on the **Морятник** map.
+6. Start the CapFrameX recording.
+7. Play normally for the full 360 seconds — combat, movement, interactions.
 
 ### 4. Number of runs
 
@@ -63,14 +62,9 @@ Minimum — **1 run**. One is better than nothing.
 
 Open [Discussions → Benchmark Submission](../../discussions/new?category=benchmarks) and fill in:
 
-- **CPU** (e.g. `AMD Ryzen 9 9900X3D`)
-- **GPU** (e.g. `NVIDIA RTX 5080`)
-- **RAM: size + type + Configured Memory Clock Speed**, e.g. `32 GB DDR5 @ 6000 MT/s`. The **actually configured speed** matters, not the DIMM's rating. You can read it from CPU-Z (Memory tab → DRAM Frequency × 2) or from `cli.exe` after installation — the menu prints a line like `6000 MT/s (fast tier)`.
-- **Wrapper version** (from `wrapper.log` or `cli.exe --status`).
-- **Active config name** (`default.json`, `my_setup.json`, etc.).
 - **Config content** — the JSON from `jvm_wrapper/configs/<name>.json`, paste it into the "Config" field.
-- **Links to CapFrameX JSON recordings** — upload to GitHub (drag-and-drop into the Discussion), Google Drive, or any file host with a direct link.
-- **A short subjective note** — "smooth", "occasional hitches", "stutter during crowd fights". Numbers matter, perception matters too.
+- **Links to CapFrameX JSON recordings** — upload to GitHub (drag-and-drop into the Discussion), Google Drive, or any file host with a direct link. Hardware specs (CPU, GPU, RAM MT/s, OS, drivers) are already embedded in the capture — no need to retype them.
+- **A short subjective note** — "smooth", "occasional hitches", "crowd-fight stutter on morytnik". Numbers matter, perception matters too — especially if the three runs had noticeably different player counts on screen (say 2 people on average vs 5–6).
 
 ## Why this helps
 
