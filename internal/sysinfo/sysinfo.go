@@ -45,6 +45,53 @@ func (i Info) FreeGB() uint64      { return i.FreeRAM >> 30 }
 // trigger big-cache tuning (their effective per-CCD cache is 32 MB).
 func (i Info) HasBigCache() bool { return i.L3CacheMB >= 64 }
 
+// MemTier classifies ConfiguredMemoryClockSpeed into three bandwidth
+// bands that the G1 tuning profile keys off. The thresholds roughly
+// split DDR generations:
+//
+//   - slow covers stock DDR4 at SPD defaults on H-chipset boards
+//     where XMP is unavailable (2133 / 2400 / 2666 MT/s).
+//   - mid  covers XMP-enabled DDR4 and baseline DDR5 (3000 – 4800).
+//   - fast covers tuned DDR5 (5200 / 5600 / 6000 / 6400 MT/s).
+//
+// When the SMBIOS probe fails and MemSpeedMTs is zero, MemMid is
+// returned as a conservative fallback: neither over-tightening the
+// pause target for a slow-memory system, nor leaving a fast-memory
+// system under-tuned.
+type MemTier int
+
+const (
+	MemSlow MemTier = iota
+	MemMid
+	MemFast
+)
+
+// MemTier returns the bandwidth tier for this system's memory.
+func (i Info) MemTier() MemTier {
+	switch {
+	case i.MemSpeedMTs == 0:
+		return MemMid
+	case i.MemSpeedMTs <= 2933:
+		return MemSlow
+	case i.MemSpeedMTs < 4800:
+		return MemMid
+	default:
+		return MemFast
+	}
+}
+
+// String gives a short label suitable for debug and menu output.
+func (t MemTier) String() string {
+	switch t {
+	case MemSlow:
+		return "slow"
+	case MemFast:
+		return "fast"
+	default:
+		return "mid"
+	}
+}
+
 var (
 	procGlobalMemoryStatusEx             = winapi.Kernel32.NewProc("GlobalMemoryStatusEx")
 	procGetLargePageMinimum              = winapi.Kernel32.NewProc("GetLargePageMinimum")
@@ -215,7 +262,9 @@ func (i Info) Describe() string {
 		s += fmt.Sprintf(", L3 %d MB", i.L3CacheMB)
 	}
 	if i.MemSpeedMTs > 0 {
-		s += fmt.Sprintf(", %d MT/s", i.MemSpeedMTs)
+		s += fmt.Sprintf(", %d MT/s (%s tier)", i.MemSpeedMTs, i.MemTier())
+	} else {
+		s += fmt.Sprintf(", mem speed unknown (%s tier fallback)", i.MemTier())
 	}
 	if i.LargePages {
 		s += ", large pages available"

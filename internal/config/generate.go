@@ -18,29 +18,59 @@ func Generate(sys sysinfo.Info) Config {
 	parallel, concurrent := gcThreads(sys.CPUThreads)
 	jit := jitProfile(sys)
 
-	// Frame-pacing-first defaults aligned with OpenJDK G1 tuning
-	// guidance and in-game CapFrameX measurements. The earlier
-	// "throughput-first" profile (pauseMs=50, mixedCountTarget=3,
-	// survivorRatio=32, tenuring=1) won a static-scene FPS benchmark
-	// but regressed p99 frametime in dynamic scenes. These values
-	// prioritise pause distribution over peak throughput:
+	// Memory-bandwidth-aware frame-pacing profile. Young-GC copy cost
+	// is bandwidth-bound, so the realistic pause target and the
+	// granularity of mixed-GC work both scale with configured memory
+	// speed. Three tiers were validated against CapFrameX captures:
 	//
-	//   * pauseMs=100       — realistic on mainstream DDR4/DDR5; G1
-	//                         stops slicing young collections into
-	//                         many tiny pauses that miss a tight goal.
-	//   * mixedCountTarget=8 — Oracle default; mixed-GC work spread
-	//                         across more passes, each pause shorter.
-	//   * ihop=35           — start concurrent marking before the
-	//                         45 % default but far enough from 0 %
-	//                         to avoid continuous mark overhead.
-	//   * survivorRatio=8, tenuring=6 — mid-lived allocations (NPC
-	//                         state, animation caches in .obj-mesh
-	//                         rendering) die in survivor instead of
-	//                         being force-promoted to old gen.
+	//   slow (≤ 2933 MT/s)   — stutters >50 ms dominated by fixed RSet
+	//                          scan cost per mixed-GC pass. Fewer,
+	//                          longer passes (mixedCount=4) amortise
+	//                          the scan overhead; a looser pause
+	//                          target (150 ms) stops G1 from slicing
+	//                          young collections into more pauses
+	//                          than the memory can actually complete.
+	//   fast (≥ 4800 MT/s)   — RSet scan is cheap, so more, shorter
+	//                          mixed passes (mixedCount=8, Oracle
+	//                          default) smooth out the p99 tail. The
+	//                          tighter pause target (80 ms) is
+	//                          attainable on DDR5 bandwidth.
+	//   mid                   — interpolated; also the fallback when
+	//                          the SMBIOS probe fails (MemSpeedMTs=0).
+	//
+	// X3D-class L3 halves the effective pause budget on top of the
+	// tier — the huge cache makes reference walks much cheaper, so
+	// the marking and copy phases complete in roughly half the time
+	// a non-X3D part needs at the same memory speed.
+	//
+	// Other pauses-sensitive flags (survivor sizing, tenuring, IHOP,
+	// live-region threshold, soft-ref retention) are not bandwidth-
+	// dependent and stay common across tiers.
+	var (
+		pauseMs          int
+		mixedCountTarget int
+		rsetUpdatingPct  int
+		newSizePercent   int
+	)
+	switch sys.MemTier() {
+	case sysinfo.MemSlow:
+		pauseMs = 150
+		mixedCountTarget = 4
+		rsetUpdatingPct = 5
+		newSizePercent = 25
+	case sysinfo.MemFast:
+		pauseMs = 80
+		mixedCountTarget = 8
+		rsetUpdatingPct = 10
+		newSizePercent = 30
+	default: // MemMid and unknown
+		pauseMs = 100
+		mixedCountTarget = 6
+		rsetUpdatingPct = 8
+		newSizePercent = 28
+	}
+
 	ihop := 35
-	pauseMs := 100
-	newSizePercent := 30
-	mixedCountTarget := 8
 	softRefMs := 50
 
 	if sys.HasBigCache() {
@@ -48,7 +78,7 @@ func Generate(sys sysinfo.Info) Config {
 		// the huge L3 and high memory bandwidth headroom. Soft-ref
 		// retention is extended so texture caches stay hot across
 		// the larger working set V-Cache can absorb.
-		pauseMs = 50
+		pauseMs /= 2
 		softRefMs = 100
 		// Extra concurrent worker only if the OS exposes at least 16
 		// logical threads. The naive "cores >= 8" check fires on a
@@ -76,7 +106,7 @@ func Generate(sys sysinfo.Info) Config {
 		G1MixedGCCountTarget:           mixedCountTarget,
 		InitiatingHeapOccupancyPercent: ihop,
 		G1MixedGCLiveThresholdPercent:  85,
-		G1RSetUpdatingPauseTimePercent: 10,
+		G1RSetUpdatingPauseTimePercent: rsetUpdatingPct,
 		SurvivorRatio:                  8,
 		MaxTenuringThreshold:           6,
 
