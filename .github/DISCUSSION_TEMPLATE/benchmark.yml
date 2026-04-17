@@ -1,4 +1,4 @@
-title: "[Benchmark] <CPU> + <RAM MT/s> + <config>"
+title: "[Benchmark] <краткое описание>"
 labels: ["benchmark", "community-data"]
 body:
   - type: markdown
