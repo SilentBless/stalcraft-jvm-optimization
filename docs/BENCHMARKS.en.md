@@ -2,22 +2,9 @@
 
 This document describes how to capture a standardised STALCRAFT performance recording and attach it to [Discussions](../../discussions) so the JVM tuning profile can be validated on hardware we don't own.
 
-## What is collected — and what is NOT
+## What is collected
 
-A CapFrameX capture contains:
-
-- CPU / GPU / motherboard model, RAM size and speed
-- drivers, OS build, PresentMon version
-- frametime sample array (frametime.ms) and aggregate metrics (avg, p99, etc.)
-
-The capture does **not** contain:
-
-- username, file paths, Windows machine ID
-- IP addresses, in-game account, character name or coordinates
-- raw JVM flags, launcher arguments
-- any game-process data beyond frametime
-
-The data is public and safe to attach to a Discussion.
+A CapFrameX capture contains the CPU / GPU / motherboard model, RAM size and speed, drivers, OS build, PresentMon version, frametime sample array (frametime.ms) and aggregate metrics (avg, p99, etc.). Nothing else — the data is public and safe to attach to a Discussion.
 
 ## Protocol
 
